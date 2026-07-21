@@ -1,36 +1,50 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# PitchRoots
 
-## Getting Started
+[pitchroots.ca](https://pitchroots.ca) — Canadian soccer, one feed.
 
-First, run the development server:
+A curated Canada-wide soccer news feed: headlines with short original summaries,
+tagged by league, national team, and province, always linking out to the original
+publisher. No accounts, no paywall — just the feed and [RSS](https://pitchroots.ca/feed.xml).
+
+## How it works
+
+- An hourly cron route polls a registry of Canadian soccer sources (RSS-first).
+- New items are deduped (per-source GUID, canonical URL, near-identical titles via
+  `pg_trgm`), then classified and summarized by Claude Haiku against a fixed tag
+  vocabulary. Items that aren't about Canadian soccer are dropped and remembered.
+- Pages are statically rendered and revalidate every 15 minutes.
+
+## Stack
+
+- [Next.js](https://nextjs.org) (App Router) on Vercel, Tailwind CSS v4
+- [Neon](https://neon.tech) Postgres (`db/schema.sql`)
+- [Anthropic API](https://platform.claude.com) (Haiku) for classify/summarize
+
+## Development
 
 ```bash
+npm install
+cp .env.example .env.local   # fill in values
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Run the ingest pipeline once locally:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npx tsx scripts/run-pipeline.ts
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Environment
 
-## Learn More
+| Variable | Purpose |
+|---|---|
+| `DATABASE_URL` | Neon Postgres connection string |
+| `ANTHROPIC_API_KEY` | Claude API key for the classifier |
+| `CRON_SECRET` | Bearer token protecting `/api/cron/poll` |
+| `SITE_URL` | Canonical site origin (defaults to `https://pitchroots.ca`) |
 
-To learn more about Next.js, take a look at the following resources:
+## For publishers
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+We link out prominently and never republish article text or images. If you run a
+source we cover and want your coverage adjusted or removed, email
+[hello@pitchroots.ca](mailto:hello@pitchroots.ca).
