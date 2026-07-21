@@ -26,7 +26,7 @@ export function Feed({ items }: { items: FeedItem[] }) {
           <div className="text-xs text-muted mb-1 flex items-center gap-2">
             <span className="font-semibold uppercase tracking-wide">{item.source_name}</span>
             <span>·</span>
-            <time dateTime={item.published_at}>
+            <time dateTime={new Date(item.published_at).toISOString()}>
               {dateFmt.format(new Date(item.published_at))} MT
             </time>
           </div>
