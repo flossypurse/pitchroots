@@ -11,6 +11,10 @@ create table if not exists sources (
   media_gate boolean not null default false,
   -- some CDNs drop non-browser UAs; null = default honest UA
   ua_override text,
+  -- regex rewrite applied to item links before verification (some feeds emit
+  -- systematically broken paths, e.g. Daily Hive's /offside/ links 404)
+  link_rewrite_from text,
+  link_rewrite_to text,
   active boolean not null default true,
   last_polled_at timestamptz,
   last_ok_at timestamptz,
@@ -55,3 +59,8 @@ insert into sources (name, feed_url, home_url, tier, media_gate, ua_override) va
   ('Soccer Nova Scotia', 'https://soccerns.ca/feed', 'https://soccerns.ca', 'provincial', false, null),
   ('Daily Hive Offside', 'https://www.dailyhive.com/feed/offside', 'https://dailyhive.com/channel/offside', 'media', true, null)
 on conflict (feed_url) do nothing;
+
+alter table sources add column if not exists link_rewrite_from text;
+alter table sources add column if not exists link_rewrite_to text;
+update sources set link_rewrite_from = '^https://dailyhive\.com/offside/', link_rewrite_to = 'https://dailyhive.com/canada/'
+  where feed_url = 'https://www.dailyhive.com/feed/offside' and link_rewrite_from is null;

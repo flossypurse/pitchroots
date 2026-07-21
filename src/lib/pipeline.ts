@@ -15,6 +15,8 @@ type SourceRow = {
   tier: string;
   media_gate: boolean;
   ua_override: string | null;
+  link_rewrite_from: string | null;
+  link_rewrite_to: string | null;
 };
 
 type Candidate = {
@@ -31,6 +33,7 @@ export type RunStats = {
   sources: number;
   fetched: number;
   candidates: number;
+  deadLinks: number;
   classified: number;
   published: number;
   dropped: number;
@@ -42,7 +45,7 @@ function canonicalize(rawUrl: string): string {
     const u = new URL(rawUrl);
     u.hash = "";
     for (const key of [...u.searchParams.keys()]) {
-      if (/^(utm_|fbclid|gclid|mc_|ref$)/i.test(key)) u.searchParams.delete(key);
+      if (/^(utm_|fbclid|gclid|mc_|cmp$|ref$)/i.test(key)) u.searchParams.delete(key);
     }
     u.searchParams.sort();
     let s = u.toString();
@@ -121,6 +124,52 @@ async function fetchFeed(source: SourceRow): Promise<Omit<Candidate, "source">[]
   return out;
 }
 
+// A link must resolve before we publish it. Applies the source's rewrite rule
+// (some feeds emit systematically broken paths), rejects hard-dead links
+// (404/410/DNS failure), and adopts the page's same-host canonical URL when it
+// declares one. WAF blocks (403) and transient errors get the benefit of the
+// doubt — the link usually works for humans even when it doesn't for us.
+export async function verifyLink(
+  source: SourceRow,
+  rawUrl: string,
+): Promise<{ ok: boolean; url: string }> {
+  let url = rawUrl;
+  if (source.link_rewrite_from && source.link_rewrite_to) {
+    url = url.replace(new RegExp(source.link_rewrite_from), source.link_rewrite_to);
+  }
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": source.ua_override ?? DEFAULT_UA },
+      signal: AbortSignal.timeout(15_000),
+      redirect: "follow",
+    });
+    if (res.status === 404 || res.status === 410) return { ok: false, url };
+    let finalUrl = res.url || url;
+    if (res.ok && (res.headers.get("content-type") ?? "").includes("html")) {
+      const head = (await res.text()).slice(0, 200_000);
+      const m =
+        head.match(/<link[^>]*rel="canonical"[^>]*href="([^"]+)"/i) ??
+        head.match(/<link[^>]*href="([^"]+)"[^>]*rel="canonical"/i);
+      if (m) {
+        try {
+          const canon = new URL(m[1], finalUrl);
+          if (canon.hostname.replace(/^www\./, "") === new URL(finalUrl).hostname.replace(/^www\./, "")) {
+            finalUrl = canon.toString();
+          }
+        } catch {
+          /* malformed canonical — keep finalUrl */
+        }
+      }
+    }
+    return { ok: true, url: finalUrl };
+  } catch (err) {
+    if (err instanceof Error && /ENOTFOUND|ECONNREFUSED/.test(String(err.cause ?? err.message))) {
+      return { ok: false, url };
+    }
+    return { ok: true, url }; // transient — benefit of the doubt
+  }
+}
+
 const CLASSIFY_TOOL: Anthropic.Messages.Tool = {
   name: "classify_item",
   description:
@@ -188,7 +237,7 @@ export async function runPipeline(): Promise<RunStats> {
   const q = sql();
   const anthropic = new Anthropic();
   const stats: RunStats = {
-    sources: 0, fetched: 0, candidates: 0, classified: 0, published: 0, dropped: 0, errors: [],
+    sources: 0, fetched: 0, candidates: 0, deadLinks: 0, classified: 0, published: 0, dropped: 0, errors: [],
   };
 
   const sources = (await q`select * from sources where active order by id`) as SourceRow[];
@@ -219,6 +268,15 @@ export async function runPipeline(): Promise<RunStats> {
     if (byGuid) continue;
     const [rejected] = await q`select 1 from rejections where source_id = ${c.source.id} and guid = ${c.guid} limit 1`;
     if (rejected) continue;
+    // Never publish a dead link. Verified/canonicalized URL replaces the feed's.
+    const verdict = await verifyLink(c.source, c.url);
+    if (!verdict.ok) {
+      stats.deadLinks++;
+      await q`insert into rejections (source_id, guid) values (${c.source.id}, ${c.guid}) on conflict do nothing`;
+      continue;
+    }
+    c.url = verdict.url;
+    c.canonicalUrl = canonicalize(verdict.url);
     const [byUrl] = await q`select 1 from items where canonical_url = ${c.canonicalUrl} limit 1`;
     if (byUrl) continue;
     const [byTitle] = await q`
