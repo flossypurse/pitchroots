@@ -31,10 +31,10 @@ export function Feed({ items }: { items: FeedItem[] }) {
             </time>
           </div>
           <a href={item.url} target="_blank" rel="noopener">
-            <h3 className="font-display font-bold text-lg leading-snug hover:text-pitch transition-colors">
+            <h2 className="font-display font-bold text-lg leading-snug hover:text-pitch transition-colors">
               {item.title}
               <span className="text-pitch"> ↗</span>
-            </h3>
+            </h2>
           </a>
           <p className="mt-1 text-[15px] leading-relaxed">{item.summary}</p>
           {item.tags.length > 0 && (

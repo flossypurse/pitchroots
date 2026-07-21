@@ -19,9 +19,16 @@ export async function generateMetadata({
   const { tag } = await params;
   const def = tagBySlug(tag);
   if (!def) return {};
+  const description = `${def.blurb} — curated Canadian soccer headlines, updated hourly, always linking to the source.`;
   return {
     title: `${def.label} news`,
-    description: `${def.blurb} — curated Canadian soccer headlines, updated hourly, always linking to the source.`,
+    description,
+    alternates: { canonical: `/${tag}` },
+    openGraph: {
+      title: `${def.label} news — PitchRoots`,
+      description,
+      url: `/${tag}`,
+    },
   };
 }
 

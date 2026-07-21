@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "About",
   description: "What PitchRoots is and how the feed works.",
+  alternates: { canonical: "/about" },
 };
 
 export default function AboutPage() {

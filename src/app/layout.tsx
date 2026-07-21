@@ -1,7 +1,7 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Archivo, Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
-import { NAV_TAGS } from "@/lib/tags";
+import { NAV_TAGS, TAGS } from "@/lib/tags";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -20,18 +20,60 @@ const archivo = Archivo({
   weight: ["500", "700", "900"],
 });
 
+const SITE = process.env.SITE_URL ?? "https://pitchroots.ca";
+
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.SITE_URL ?? "https://pitchroots.ca"),
+  metadataBase: new URL(SITE),
   title: {
-    default: "PitchRoots — Canadian soccer, one feed",
+    default: "PitchRoots — Canadian soccer news, one feed",
     template: "%s — PitchRoots",
   },
   description:
     "What's happening in Canadian soccer today. Curated headlines from across the country — CanMNT, CanWNT, CPL, NSL, MLS, League1 and more — always linking to the source.",
+  openGraph: {
+    siteName: "PitchRoots",
+    type: "website",
+    locale: "en_CA",
+    url: "/",
+    title: "PitchRoots — Canadian soccer news, one feed",
+    description:
+      "Curated Canadian soccer headlines — national teams, CPL, NSL, MLS, League1 and the provincial game — always linking to the source.",
+  },
+  twitter: {
+    card: "summary_large_image",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
   alternates: {
     types: { "application/rss+xml": "/feed.xml" },
   },
 };
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f7f7f2" },
+    { media: "(prefers-color-scheme: dark)", color: "#101410" },
+  ],
+};
+
+const FOOTER_GROUPS: { heading: string; slugs: string[] }[] = [
+  {
+    heading: "Follow",
+    slugs: ["canmnt", "canwnt", "canpl", "nsl", "mls", "league1", "world-cup", "canadian-championship", "womens", "youth"],
+  },
+  {
+    heading: "By province",
+    slugs: TAGS.filter((t) => t.group === "province").map((t) => t.slug),
+  },
+];
 
 export default function RootLayout({
   children,
@@ -54,7 +96,7 @@ export default function RootLayout({
             <p className="mt-1 text-sm text-muted">
               Canadian soccer, one feed. Every story links to its source.
             </p>
-            <nav className="mt-4 flex flex-wrap gap-2 text-sm">
+            <nav className="mt-4 flex flex-wrap gap-2 text-sm" aria-label="Leagues and competitions">
               {NAV_TAGS.map((t) => (
                 <Link
                   key={t.slug}
@@ -69,10 +111,30 @@ export default function RootLayout({
         </header>
         <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6">{children}</main>
         <footer className="border-t border-line">
-          <div className="mx-auto w-full max-w-3xl px-4 py-6 text-sm text-muted flex flex-wrap gap-x-6 gap-y-2">
-            <Link href="/about" className="hover:text-pitch">About</Link>
-            <a href="/feed.xml" className="hover:text-pitch">RSS</a>
-            <span>Headlines and summaries link out to the original publishers.</span>
+          <div className="mx-auto w-full max-w-3xl px-4 py-6 text-sm text-muted space-y-4">
+            {FOOTER_GROUPS.map((group) => (
+              <nav key={group.heading} aria-label={group.heading}>
+                <span className="font-semibold">{group.heading}:</span>{" "}
+                {group.slugs.map((slug, i) => {
+                  const t = TAGS.find((x) => x.slug === slug);
+                  if (!t) return null;
+                  return (
+                    <span key={slug}>
+                      {i > 0 && " · "}
+                      <Link href={`/${slug}`} className="hover:text-pitch">
+                        {t.group === "province" ? t.label : `${t.label} news`}
+                      </Link>
+                    </span>
+                  );
+                })}
+              </nav>
+            ))}
+            <div className="flex flex-wrap gap-x-6 gap-y-2 pt-2 border-t border-line">
+              <Link href="/about" className="hover:text-pitch">About</Link>
+              <a href="/feed.xml" className="hover:text-pitch">RSS</a>
+              <a href="mailto:hello@pitchroots.ca" className="hover:text-pitch">hello@pitchroots.ca</a>
+              <span>Headlines and summaries link out to the original publishers.</span>
+            </div>
           </div>
         </footer>
       </body>

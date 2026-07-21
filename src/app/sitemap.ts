@@ -1,14 +1,27 @@
 import type { MetadataRoute } from "next";
+import { sql } from "@/lib/db";
 import { TAGS } from "@/lib/tags";
+
+export const revalidate = 3600;
 
 const SITE = process.env.SITE_URL ?? "https://pitchroots.ca";
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const q = sql();
+  const rows = (await q`
+    select t.tag, max(i.published_at) as last
+    from items i, unnest(i.tags) as t(tag)
+    group by t.tag`) as { tag: string; last: string }[];
+  const lastByTag = new Map(rows.map((r) => [r.tag, new Date(r.last)]));
+  const [overall] = (await q`select max(published_at) as last from items`) as { last: string | null }[];
+  const home = overall?.last ? new Date(overall.last) : new Date();
+
   return [
-    { url: SITE, changeFrequency: "hourly", priority: 1 },
+    { url: SITE, lastModified: home, changeFrequency: "hourly", priority: 1 },
     { url: `${SITE}/about`, changeFrequency: "monthly", priority: 0.3 },
     ...TAGS.map((t) => ({
       url: `${SITE}/${t.slug}`,
+      lastModified: lastByTag.get(t.slug) ?? home,
       changeFrequency: "hourly" as const,
       priority: 0.7,
     })),
