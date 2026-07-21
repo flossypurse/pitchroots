@@ -50,5 +50,8 @@ insert into sources (name, feed_url, home_url, tier, media_gate, ua_override) va
    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36'),
   ('League1 Ontario', 'https://league1ontario.com/feed', 'https://league1ontario.com', 'semi-pro', false, null),
   ('CBC Soccer', 'https://www.cbc.ca/webfeed/rss/rss-sports-soccer', 'https://www.cbc.ca/sports/soccer', 'media', true,
-   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36')
+   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36'),
+  ('Alberta Soccer', 'https://www.albertasoccer.com/feed', 'https://www.albertasoccer.com', 'provincial', false, null),
+  ('Soccer Nova Scotia', 'https://soccerns.ca/feed', 'https://soccerns.ca', 'provincial', false, null),
+  ('Daily Hive Offside', 'https://www.dailyhive.com/feed/offside', 'https://dailyhive.com/channel/offside', 'media', true, null)
 on conflict (feed_url) do nothing;

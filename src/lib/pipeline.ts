@@ -164,6 +164,11 @@ async function classify(anthropic: Anthropic, c: Candidate): Promise<Classificat
     system:
       "You curate PitchRoots, a Canada-wide soccer news feed. You classify one item at a time. " +
       "Summaries are neutral, factual, 1-2 sentences, written entirely in your own words — never reuse the source's phrasing. No hype, no editorializing. " +
+      "Club-to-league map (only tag a league the story actually involves): " +
+      "mls = Toronto FC, Vancouver Whitecaps, CF Montréal. " +
+      "canpl = Atlético Ottawa, Cavalry FC, Forge FC, Halifax Wanderers, Pacific FC, Valour FC, Vancouver FC, York United. " +
+      "nsl = AFC Toronto, Calgary Wild, Halifax Tides, Montreal Roses, Ottawa Rapid, Vancouver Rise. " +
+      "Tag provinces only for stories with a clear provincial/city angle. " +
       gate,
     messages: [
       {
