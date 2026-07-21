@@ -2,7 +2,7 @@ export type TagDef = {
   slug: string;
   label: string;
   blurb: string;
-  group: "league" | "national" | "cross" | "province";
+  group: "league" | "national" | "competition" | "cross" | "province";
 };
 
 // Canonical tag vocabulary. The classifier may only assign slugs from this list,
@@ -14,6 +14,8 @@ export const TAGS: TagDef[] = [
   { slug: "nsl", label: "NSL", blurb: "Northern Super League", group: "league" },
   { slug: "mls", label: "MLS", blurb: "Canada's MLS clubs — Toronto FC, Vancouver Whitecaps, CF Montréal", group: "league" },
   { slug: "league1", label: "League1", blurb: "League1 Canada — Ontario, BC, Québec", group: "league" },
+  { slug: "world-cup", label: "World Cup", blurb: "Canada and the FIFA World Cup — 2026 co-hosts", group: "competition" },
+  { slug: "canadian-championship", label: "Canadian Championship", blurb: "The Canadian Championship — the country's domestic cup", group: "competition" },
   { slug: "womens", label: "Women's", blurb: "Women's soccer across Canada", group: "cross" },
   { slug: "youth", label: "Youth", blurb: "Youth and development soccer", group: "cross" },
   { slug: "alberta", label: "Alberta", blurb: "Soccer in Alberta", group: "province" },
