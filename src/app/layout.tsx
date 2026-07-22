@@ -131,6 +131,7 @@ export default function RootLayout({
             ))}
             <div className="flex flex-wrap gap-x-6 gap-y-2 pt-2 border-t border-line">
               <Link href="/about" className="hover:text-pitch">About</Link>
+              <Link href="/how-it-works" className="hover:text-pitch">How it&apos;s built</Link>
               <a href="/feed.xml" className="hover:text-pitch">RSS</a>
               <a href="mailto:hello@pitchroots.ca" className="hover:text-pitch">hello@pitchroots.ca</a>
               <span>Headlines and summaries link out to the original publishers.</span>

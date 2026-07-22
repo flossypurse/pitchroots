@@ -19,6 +19,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   return [
     { url: SITE, lastModified: home, changeFrequency: "hourly", priority: 1 },
     { url: `${SITE}/about`, changeFrequency: "monthly", priority: 0.3 },
+    { url: `${SITE}/how-it-works`, changeFrequency: "monthly", priority: 0.3 },
     ...TAGS.map((t) => ({
       url: `${SITE}/${t.slug}`,
       lastModified: lastByTag.get(t.slug) ?? home,

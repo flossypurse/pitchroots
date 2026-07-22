@@ -1,0 +1,22 @@
+import { revalidatePath } from "next/cache";
+import { TAG_SLUGS } from "@/lib/tags";
+
+// On-demand revalidation, called by the durable ingestion worker after a run
+// publishes new items (see supabase/functions/poll — triggerRevalidate). The
+// worker lives outside this app now, so it can't call revalidatePath() directly;
+// it POSTs here instead. Bearer-protected with the same shared secret the worker
+// carries. A missed call is harmless — pages still refresh on the ISR timer.
+export async function POST(request: Request) {
+  const secret = process.env.REVALIDATE_SECRET;
+  if (!secret) {
+    // Fail loud on misconfiguration rather than accepting `Bearer undefined`.
+    return new Response("Server misconfiguration", { status: 500 });
+  }
+  const auth = request.headers.get("authorization");
+  if (auth !== `Bearer ${secret}`) {
+    return new Response("Unauthorized", { status: 401 });
+  }
+  revalidatePath("/");
+  for (const slug of TAG_SLUGS) revalidatePath(`/${slug}`);
+  return Response.json({ revalidated: true, paths: 1 + TAG_SLUGS.length });
+}

@@ -25,9 +25,21 @@ export default function AboutPage() {
       <p>
         The feed checks a curated list of Canadian soccer sources every hour — national
         media, league sites, independent outlets, and club news. Items are filtered for
-        Canadian relevance, tagged, and summarized. No accounts, no paywall, no
-        newsletter — just the feed and{" "}
+        Canadian relevance, tagged, and summarized. There are no accounts and no
+        paywall; read it on the site or subscribe by{" "}
         <a href="/feed.xml" className="text-pitch underline">RSS</a>.
+      </p>
+      <h2 className="font-display font-bold text-lg pt-2">How it&apos;s built</h2>
+      <p>
+        The feed rebuilds itself every hour with a durable workflow — a live example of{" "}
+        <a href="https://www.resonatehq.io" className="text-pitch underline">
+          Resonate
+        </a>{" "}
+        durable execution running inside the database, with no separate workflow
+        server.{" "}
+        <a href="/how-it-works" className="text-pitch underline">
+          Here&apos;s the full explanation →
+        </a>
       </p>
       <h2 className="font-display font-bold text-lg pt-2">For publishers</h2>
       <p>

@@ -30,7 +30,7 @@ export function Feed({ items }: { items: FeedItem[] }) {
               {dateFmt.format(new Date(item.published_at))} MT
             </time>
           </div>
-          <a href={item.url} target="_blank" rel="noopener">
+          <a href={item.url} target="_blank" rel="noopener noreferrer">
             <h2 className="font-display font-bold text-lg leading-snug hover:text-pitch transition-colors">
               {item.title}
               <span className="text-pitch"> ↗</span>

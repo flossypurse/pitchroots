@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Feed } from "@/components/Feed";
 import { latestItems } from "@/lib/db";
 
@@ -42,12 +43,18 @@ export default async function HomePage() {
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }}
       />
       <h1 className="font-display font-bold text-sm uppercase tracking-widest text-pitch mb-4">
         The latest in Canadian soccer
       </h1>
       <Feed items={items} />
+      <p className="mt-8 pt-4 border-t border-line text-xs text-muted">
+        This feed rebuilds itself every hour with a durable workflow.{" "}
+        <Link href="/how-it-works" className="hover:text-pitch underline">
+          See how it&apos;s built →
+        </Link>
+      </p>
     </>
   );
 }
