@@ -35,6 +35,9 @@ const MAX_ITEM_AGE_DAYS = 7;
 // Per-source cap. In the old single-pass loop this was one global cap of 40;
 // now that sources fan out and run concurrently, the fair unit is per-source.
 const MAX_NEW_PER_SOURCE = 12;
+// Consecutive whole-poll failures before a source is auto-parked (active=false).
+// ~24 ≈ a day of hourly failures; recheckDisabledSources heals it when it recovers.
+const FAIL_DISABLE_THRESHOLD = 24;
 
 // Canonical tag vocabulary — MUST stay in lockstep with web/src/lib/tags.ts.
 // (The Edge Function can't import from the Next app; this is the one duplication,
@@ -303,7 +306,7 @@ resonate.register("poll", async function poll(ctx: Context) {
   const published = results.reduce((n, r) => n + r.published, 0);
   if (published > 0) await ctx.run(() => triggerRevalidate());
 
-  return {
+  const summary = {
     sources: results.length,
     published,
     classified: results.reduce((n, r) => n + r.classified, 0),
@@ -311,6 +314,13 @@ resonate.register("poll", async function poll(ctx: Context) {
     dropped: results.reduce((n, r) => n + r.dropped, 0),
     perSource: results,
   };
+
+  // Persist a per-run summary that outlives Resonate's ~24h promise GC, for feed-
+  // health debugging. Keyed on this run's origin id so an at-least-once replay of
+  // this step upserts the same row instead of appending a duplicate.
+  await ctx.run(() => logRun(ctx.originId, summary));
+
+  return summary;
 });
 
 // ingestSource() — durable per-source ingest. fetch (1 checkpoint) → then, per
@@ -322,15 +332,28 @@ resonate.register("ingestSource", async function ingestSource(ctx: Context, sour
     source: source.name, fetched: 0, deadLinks: 0, classified: 0, published: 0, dropped: 0,
   };
 
-  let entries: Candidate[];
-  try {
-    entries = (await ctx.run(() => fetchFeed(source))) as Candidate[];
-    await ctx.run(() => markSourceOk(source.id));
-  } catch (err) {
+  // Durable retry with backoff: one flaky fetch shouldn't cost a source its whole
+  // hour. Each attempt is its own ctx.run checkpoint; ctx.sleep between attempts
+  // suspends the run (zero compute) and is resolved by the 5s timer tick. Total
+  // backoff (30s + 60s) stays far under the 5-min task lease and the 24h root
+  // deadline. Only after all attempts fail do we count this source as failed.
+  let entries: Candidate[] | null = null;
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      entries = (await ctx.run(() => fetchFeed(source))) as Candidate[];
+      break;
+    } catch (err) {
+      lastErr = err;
+      if (attempt < 3) await ctx.sleep(attempt * 30_000); // 30s, then 60s
+    }
+  }
+  if (entries === null) {
     await ctx.run(() => markSourceFail(source.id));
-    stats.error = String(err);
+    stats.error = String(lastErr);
     return stats;
   }
+  await ctx.run(() => markSourceOk(source.id));
 
   // Wrapped in ctx.run so the cutoff is checkpointed: every replay uses the same
   // boundary regardless of when a resumed worker wakes (control flow must depend
@@ -389,6 +412,30 @@ resonate.register("ingestSource", async function ingestSource(ctx: Context, sour
   return stats;
 });
 
+// recheckDisabledSources() — the auto-heal half of the self-healing pair. A source
+// that fails enough whole polls in a row gets parked (active=false) by markSourceFail;
+// this durable run — invoked by its own daily pg_cron job — re-fetches each parked
+// feed in a checkpoint and un-parks the ones that respond, resetting fail_count.
+// Calendar-scale scheduling lives in pg_cron rather than a multi-day ctx.sleep,
+// which sidesteps the 24h root-timeout clamp.
+resonate.register(
+  "recheckDisabledSources",
+  async function recheckDisabledSources(ctx: Context) {
+    const disabled = (await ctx.run(() => getDisabledSources())) as SourceRow[];
+    let healed = 0;
+    for (const source of disabled) {
+      try {
+        await ctx.run(() => fetchFeed(source)); // reachable + parseable?
+        await ctx.run(() => reviveSource(source.id));
+        healed++;
+      } catch {
+        // still down — leave it parked for the next daily recheck
+      }
+    }
+    return { checked: disabled.length, healed };
+  },
+);
+
 resonate.httpHandler();
 
 // ── data access (plain SQL; each is called inside a ctx.run) ─────────────────
@@ -405,7 +452,44 @@ async function markSourceOk(id: number): Promise<null> {
 async function markSourceFail(id: number): Promise<null> {
   // Non-idempotent increment by design — a best-effort health counter (see the
   // semantics note at the top of the file); an over-count on replay is harmless.
-  await sql`update sources set last_polled_at = now(), fail_count = fail_count + 1 where id = ${id}`;
+  // Auto-disable: each poll already exhausts its own fetch retries before landing
+  // here, so once a source has failed FAIL_DISABLE_THRESHOLD whole polls in a row
+  // (~a day of hourly failures) we park it — the hourly run only reads active
+  // sources, so it drops out. recheckDisabledSources un-parks it when it recovers.
+  await sql`
+    update sources
+       set last_polled_at = now(),
+           fail_count = fail_count + 1,
+           active = case when fail_count + 1 >= ${FAIL_DISABLE_THRESHOLD} then false else active end
+     where id = ${id}`;
+  return null;
+}
+
+async function getDisabledSources(): Promise<SourceRow[]> {
+  return await sql<SourceRow[]>`select * from sources where not active order by id`;
+}
+
+async function reviveSource(id: number): Promise<null> {
+  await sql`update sources set active = true, fail_count = 0, last_ok_at = now(), last_polled_at = now() where id = ${id}`;
+  return null;
+}
+
+async function logRun(
+  originId: string,
+  s: {
+    sources: number;
+    published: number;
+    classified: number;
+    deadLinks: number;
+    dropped: number;
+    perSource: SourceStats[];
+  },
+): Promise<null> {
+  await sql`
+    insert into run_log (origin_id, sources, published, classified, dead_links, dropped, per_source)
+    values (${originId}, ${s.sources}, ${s.published}, ${s.classified},
+            ${s.deadLinks}, ${s.dropped}, ${sql.json(s.perSource)})
+    on conflict (origin_id) do nothing`;
   return null;
 }
 

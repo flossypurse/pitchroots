@@ -47,6 +47,18 @@ create table if not exists rejections (
   primary key (source_id, guid)
 );
 
+-- Per-run ingestion summary. Resonate GCs completed promises after ~24h, so the
+-- durable run's own result is not a durable history. This append-only log keeps
+-- run-level stats for feed-health debugging. Keyed on the run's origin promise id
+-- so a replayed final step upserts the same row instead of appending a duplicate.
+create table if not exists run_log (
+  origin_id text primary key,
+  ran_at timestamptz not null default now(),
+  sources int, published int, classified int, dead_links int, dropped int,
+  per_source jsonb
+);
+create index if not exists run_log_ran_at_idx on run_log (ran_at desc);
+
 insert into sources (name, feed_url, home_url, tier, media_gate, ua_override) values
   ('Canada Soccer', 'https://www.canadasoccer.com/feed', 'https://www.canadasoccer.com', 'national-team', false, null),
   ('Sportsnet Soccer', 'https://www.sportsnet.ca/soccer/feed/', 'https://www.sportsnet.ca/soccer/', 'media', true, null),
