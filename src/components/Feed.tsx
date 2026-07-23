@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import type { FeedItem } from "@/lib/db";
 import { tagBySlug } from "@/lib/tags";
 
@@ -10,7 +13,34 @@ const dateFmt = new Intl.DateTimeFormat("en-CA", {
   timeZone: "America/Edmonton",
 });
 
+// How many cards to show first, and how many to reveal per scroll. 10 fills a
+// desktop viewport with a couple of cards of runway; a smaller first batch would
+// under-fill the screen and trigger an immediate second load.
+const INITIAL = 10;
+const STEP = 10;
+
 export function Feed({ items }: { items: FeedItem[] }) {
+  const [visible, setVisible] = useState(INITIAL);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (visible >= items.length) return;
+    const el = sentinelRef.current;
+    if (!el) return;
+    // rootMargin pulls the trigger ~800px before the sentinel scrolls into view,
+    // so the next batch is on the page before the reader reaches the end.
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          setVisible((v) => Math.min(v + STEP, items.length));
+        }
+      },
+      { rootMargin: "800px 0px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [visible, items.length]);
+
   if (items.length === 0) {
     return (
       <p className="py-12 text-center text-muted">
@@ -20,42 +50,45 @@ export function Feed({ items }: { items: FeedItem[] }) {
   }
 
   return (
-    <ol className="space-y-4">
-      {items.map((item) => (
-        <li key={item.id} className="rounded-lg border border-line bg-card p-4">
-          <div className="text-xs text-muted mb-1 flex items-center gap-2">
-            <span className="font-semibold uppercase tracking-wide">{item.source_name}</span>
-            <span>·</span>
-            <time dateTime={new Date(item.published_at).toISOString()}>
-              {dateFmt.format(new Date(item.published_at))} MT
-            </time>
-          </div>
-          <a href={item.url} target="_blank" rel="noopener noreferrer">
-            <h2 className="font-display font-bold text-lg leading-snug hover:text-pitch transition-colors">
-              {item.title}
-              <span className="text-pitch"> ↗</span>
-            </h2>
-          </a>
-          <p className="mt-1 text-[15px] leading-relaxed">{item.summary}</p>
-          {item.tags.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {item.tags.map((slug) => {
-                const def = tagBySlug(slug);
-                if (!def) return null;
-                return (
-                  <Link
-                    key={slug}
-                    href={`/${slug}`}
-                    className="text-xs text-muted rounded-full border border-line px-2 py-0.5 hover:border-pitch hover:text-pitch"
-                  >
-                    {def.label}
-                  </Link>
-                );
-              })}
+    <>
+      <ol className="space-y-4">
+        {items.slice(0, visible).map((item) => (
+          <li key={item.id} className="rounded-lg border border-line bg-card p-4">
+            <div className="text-xs text-muted mb-1 flex items-center gap-2">
+              <span className="font-semibold uppercase tracking-wide">{item.source_name}</span>
+              <span>·</span>
+              <time dateTime={new Date(item.published_at).toISOString()}>
+                {dateFmt.format(new Date(item.published_at))} MT
+              </time>
             </div>
-          )}
-        </li>
-      ))}
-    </ol>
+            <a href={item.url} target="_blank" rel="noopener noreferrer">
+              <h2 className="font-display font-bold text-lg leading-snug hover:text-pitch transition-colors">
+                {item.title}
+                <span className="text-pitch"> ↗</span>
+              </h2>
+            </a>
+            <p className="mt-1 text-[15px] leading-relaxed">{item.summary}</p>
+            {item.tags.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {item.tags.map((slug) => {
+                  const def = tagBySlug(slug);
+                  if (!def) return null;
+                  return (
+                    <Link
+                      key={slug}
+                      href={`/${slug}`}
+                      className="text-xs text-muted rounded-full border border-line px-2 py-0.5 hover:border-pitch hover:text-pitch"
+                    >
+                      {def.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </li>
+        ))}
+      </ol>
+      {visible < items.length && <div ref={sentinelRef} aria-hidden className="h-px" />}
+    </>
   );
 }
